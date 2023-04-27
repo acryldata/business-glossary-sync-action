@@ -1,0 +1,51 @@
+name: Acryl Business Glossary Sync
+description: Update your business glossary yaml files with changes from DataHub.
+inputs:
+  datahub_gms_host:
+    description: "DataHub GMS host."
+    required: true
+  datahub_gms_token:
+    description: "DataHub GMS token."
+    required: false
+
+  business_glossary_file:
+    description: "Path to the business glossary yaml file."
+    required: true
+  enable_auto_id:
+    description: "Set to true if you use `enable_auto_id` in your business glossary ingestion."
+    default: "false"
+
+  debug_mode:
+    description: "Set to true to enable debug mode."
+    default: "false"
+
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v3
+      with:
+        python-version: "3.10"
+
+    - name: Sync business glossary
+      shell: bash
+      run: |
+        pip install -r ${{ github.action_path }}/requirements.txt
+
+        python ${{ github.action_path }}/update-biz-glossary.py \
+          --enable-auto-id ${{ inputs.enable_auto_id }} \
+          --file ${{ inputs.business_glossary_file }}
+      env:
+        DATAHUB_GMS_HOST: ${{ inputs.datahub_gms_host }}
+        DATAHUB_GMS_TOKEN: ${{ inputs.datahub_gms_token }}
+        DEBUG_MODE: ${{ inputs.debug_mode }}
+    - name: Create Pull Request
+      uses: peter-evans/create-pull-request@v5
+      with:
+        branch: acryl-business-glossary-sync
+
+branding:
+  icon: "activity"
+  color: "green"
