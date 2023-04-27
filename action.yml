@@ -34,7 +34,8 @@ runs:
       run: |
         pip install -r ${{ github.action_path }}/requirements.txt
 
-        python ${{ github.action_path }}/update-biz-glossary.py \
+        python ${{ github.action_path }}/glossary-sync.py \
+          update-glossary-file \
           --enable-auto-id ${{ inputs.enable_auto_id }} \
           --file ${{ inputs.business_glossary_file }}
       env:
