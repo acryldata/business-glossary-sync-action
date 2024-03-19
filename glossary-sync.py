@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
 ParentUrn = str
 TEST_MODE = os.getenv("TEST_MODE", "false").lower() == "true"
 
-_DELETED_NODE_TOMBSTONE = object()
+_DELETED_NODE_TOMBSTONE = dict()
 
 _GlossaryElement = TypeVar("_GlossaryElement", GlossaryNodeConfig, GlossaryTermConfig)
 
