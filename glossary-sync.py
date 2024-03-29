@@ -511,15 +511,16 @@ def cli():
 @cli.command()
 @click.option("--enable-auto-id", type=bool, required=True)
 @click.option("--file", type=click.Path(exists=True, dir_okay=False), required=True)
+@click.option("--prune", type=bool, default=False, required=False)
 @click.option("--output", type=click.Path())
 def update_glossary_file(
-    file: str, enable_auto_id: bool, output: Optional[str]
+    file: str, enable_auto_id: bool, prune: bool, output: Optional[str]
 ) -> None:
     if not output:
         output = file
 
     _update_glossary_file(
-        file, enable_auto_id=enable_auto_id, output=output, prune=True
+        file, enable_auto_id=enable_auto_id, output=output, prune=prune
     )
 
 
