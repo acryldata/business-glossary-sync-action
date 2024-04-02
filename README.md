@@ -33,6 +33,7 @@ jobs:
           # TODO(developer): Update this with your config/credentials.
           business_glossary_file: ./business_glossary.yml
           enable_auto_id: "true"
+          prune: "false"
 
           datahub_gms_host: https://<customer>.acryl.io/gms
           datahub_gms_token: ${{ secrets.ACRYL_GMS_TOKEN }}

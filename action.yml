@@ -14,6 +14,9 @@ inputs:
   enable_auto_id:
     description: "Set to true if you use `enable_auto_id` in your business glossary ingestion."
     default: "false"
+  prune:
+    description: "Set to true if you want to use only glossraies from file and not the use from server"
+    default: "false"
 
   debug_mode:
     description: "Set to true to enable debug mode."
@@ -38,7 +41,8 @@ runs:
         python ${{ github.action_path }}/glossary-sync.py \
           update-glossary-file \
           --enable-auto-id ${{ inputs.enable_auto_id }} \
-          --file ${{ inputs.business_glossary_file }}
+          --file ${{ inputs.business_glossary_file }} \
+          --prune ${{ inputs.prune }}
 
         git status
       env:
