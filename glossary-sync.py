@@ -35,6 +35,7 @@ from datahub.metadata.schema_classes import (
 )
 from datahub.utilities.urns.urn import guess_entity_type
 
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 ParentUrn = str
@@ -114,8 +115,12 @@ def _datahub_institutional_memory_to_knowledge_links(
 
 def _glossary_node_from_datahub(
     urn: str, aspects: AspectBag
-) -> Tuple[GlossaryNodeConfig, Optional[ParentUrn]]:
-    info_aspect: GlossaryNodeInfoClass = aspects["glossaryNodeInfo"]
+) -> Tuple[Optional[GlossaryTermConfig], Optional[ParentUrn]]:
+    try:
+        info_aspect: GlossaryNodeInfoClass = aspects["glossaryNodeInfo"]
+    except KeyError:
+        logger.error(f"Skipping URN {urn} due to missing 'glossaryNodeInfo' aspect")
+        return None, None
 
     owners = aspects.get("ownership")
     institutionalMemory = aspects.get("institutionalMemory")
@@ -140,8 +145,12 @@ def _glossary_node_from_datahub(
 
 def _glossary_term_from_datahub(
     urn: str, aspects: AspectBag
-) -> Tuple[GlossaryTermConfig, Optional[ParentUrn]]:
-    info_aspect: GlossaryTermInfoClass = aspects["glossaryTermInfo"]
+) -> Tuple[Optional[GlossaryTermConfig], Optional[ParentUrn]]:
+    try:
+        info_aspect: GlossaryTermInfoClass = aspects["glossaryTermInfo"]
+    except KeyError:
+        logger.error(f"Skipping URN {urn} due to missing 'glossaryTermInfo' aspect")
+        return None, None
 
     related_terms: GlossaryRelatedTermsClass = aspects.get(
         "glossaryRelatedTerms", GlossaryRelatedTermsClass()
@@ -199,6 +208,8 @@ def fetch_datahub_glossary():
     # Construct the hierarchy of nodes.
     top_level_nodes: List[GlossaryNodeConfig] = []
     for (node, parent_urn) in raw_nodes.values():
+        if node is None:
+            continue
         if parent_urn is None:
             top_level_nodes.append(node)
         else:
@@ -216,6 +227,8 @@ def fetch_datahub_glossary():
     # Construct the hierarchy of terms.
     top_level_terms: List[GlossaryTermConfig] = []
     for (term, parent_urn) in raw_terms.values():
+        if term is None:
+            continue
         if parent_urn is None:
             top_level_terms.append(term)
         else:
