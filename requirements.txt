@@ -1,2 +1,2 @@
-acryl-datahub[datahub-business-glossary] @ https://docs-website-9apm7oohu-acryldata.vercel.app/artifacts/wheels/acryl_datahub-0.0.0.dev1-py3-none-any.whl
+acryl-datahub[datahub-business-glossary]==0.14.0.5
 ruamel.yaml
