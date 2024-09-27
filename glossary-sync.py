@@ -4,38 +4,27 @@ import pathlib
 from typing import Dict, Iterable, List, Optional, Set, Tuple, TypeVar, Union
 
 import click
+import progressbar
+import requests
 import ruamel.yaml.util
+from datahub.ingestion.graph.client import (DatahubClientConfig, DataHubGraph,
+                                            get_default_graph)
+from datahub.ingestion.source.metadata.business_glossary import (
+    BusinessGlossaryConfig, BusinessGlossaryFileSource, DefaultConfig,
+    GlossaryNodeConfig, GlossaryNodeInterface, GlossaryTermConfig,
+    KnowledgeCard, Owners, materialize_all_node_urns, populate_path_vs_id)
+from datahub.metadata.schema_classes import (AspectBag, DomainsClass,
+                                             GlossaryNodeInfoClass,
+                                             GlossaryRelatedTermsClass,
+                                             GlossaryTermInfoClass,
+                                             InstitutionalMemoryClass,
+                                             OwnershipClass)
+from datahub.utilities.urns.urn import guess_entity_type
 from ruamel.yaml import YAML
 
-from datahub.ingestion.graph.client import (
-    DatahubClientConfig,
-    DataHubGraph,
-    get_default_graph,
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
-from datahub.ingestion.source.metadata.business_glossary import (
-    BusinessGlossaryConfig,
-    BusinessGlossaryFileSource,
-    DefaultConfig,
-    GlossaryNodeConfig,
-    GlossaryNodeInterface,
-    GlossaryTermConfig,
-    KnowledgeCard,
-    Owners,
-    materialize_all_node_urns,
-    populate_path_vs_id,
-)
-from datahub.metadata.schema_classes import (
-    AspectBag,
-    DomainsClass,
-    GlossaryNodeInfoClass,
-    GlossaryRelatedTermsClass,
-    GlossaryTermInfoClass,
-    InstitutionalMemoryClass,
-    OwnershipClass,
-)
-from datahub.utilities.urns.urn import guess_entity_type
-
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 ParentUrn = str
@@ -188,26 +177,32 @@ def _glossary_term_from_datahub(
 def fetch_datahub_glossary():
     graph = get_graph()
 
-    # Get all the urns in the glossary.
+    logger.info("Get all the urns in the glossary.")
     urns = list(graph.get_urns_by_filter(entity_types=["glossaryTerm", "glossaryNode"]))
+    logger.info(f"Got {len(urns)} urns")
 
-    # Hydrate them into entities.
-    entities = {urn: graph.get_entity_semityped(urn) for urn in urns}
+    logger.info("Hydrate them into entities.")
+    entities = {}
+    for urn in progressbar.progressbar(urns):
+        try:
+            entities[urn] = graph.get_entity_semityped(urn)
+        except requests.exceptions.HTTPError as e:
+            logger.error(f"Error for urn {urn}: {e}")
 
     # Map these into pydantic models defined in the biz glossary source.
     # 1. Map each AspectBag -> pydantic model.
     # 2. Construct the hierarchy of pydantic models using the lookup table.
 
-    # Parse glossary nodes.
-    raw_nodes = {
-        urn: _glossary_node_from_datahub(urn, entities[urn])
-        for urn in urns
-        if guess_entity_type(urn) == "glossaryNode"
-    }
+    logger.info("Parse glossary nodes.")
+    raw_nodes = {}
+    for urn in progressbar.progressbar(urns):
+        if guess_entity_type(urn) != "glossaryNode" or urn not in entities:
+            continue
+        raw_nodes[urn] = _glossary_node_from_datahub(urn, entities[urn])
 
-    # Construct the hierarchy of nodes.
+    logger.info("Construct the hierarchy of nodes.")
     top_level_nodes: List[GlossaryNodeConfig] = []
-    for (node, parent_urn) in raw_nodes.values():
+    for node, parent_urn in raw_nodes.values():
         if node is None:
             continue
         if parent_urn is None:
@@ -217,19 +212,22 @@ def fetch_datahub_glossary():
             parent_node.nodes = parent_node.nodes or []
             parent_node.nodes.append(node)
 
-    # Parse glossary terms.
-    raw_terms = {
-        urn: _glossary_term_from_datahub(urn, entities[urn])
-        for urn in urns
-        if guess_entity_type(urn) == "glossaryTerm"
-    }
+    logger.info("Parse glossary terms.")
+    raw_terms = {}
+    for urn in progressbar.progressbar(urns):
+        if guess_entity_type(urn) != "glossaryTerm" or urn not in entities:
+            continue
+        raw_terms[urn] = _glossary_term_from_datahub(urn, entities[urn])
 
-    # Construct the hierarchy of terms.
+    logger.info("Construct the hierarchy of terms.")
     top_level_terms: List[GlossaryTermConfig] = []
-    for (term, parent_urn) in raw_terms.values():
+    for term, parent_urn in raw_terms.values():
         if term is None:
             continue
         if parent_urn is None:
+            top_level_terms.append(term)
+        elif parent_urn not in raw_nodes:
+            logger.error(f"Unable to find parent urn: {parent_urn} for term {term.id}")
             top_level_terms.append(term)
         else:
             parent_node, _ = raw_nodes[parent_urn]
@@ -396,9 +394,11 @@ def glossary_to_dict_minimize_diffs(
                         # Update defaults with the current node owner, if any.
                         # This way, the "owners" field cascades down to all child nodes.
                         defaults=defaults.copy(
-                            update=dict(owners=existing_node_elem.owners)
-                            if existing_node_elem.owners
-                            else dict()
+                            update=(
+                                dict(owners=existing_node_elem.owners)
+                                if existing_node_elem.owners
+                                else dict()
+                            )
                         ),
                     )
                 )
@@ -481,11 +481,11 @@ def _update_glossary_file(
     if not output:
         output = file
 
-    # Read the existing biz glossary file.
+    logger.info("Read the existing biz glossary file")
     existing_glossary = BusinessGlossaryFileSource.load_glossary_config(file)
     materialize_all_node_urns(existing_glossary, enable_auto_id=enable_auto_id)
 
-    # Fetch the latest glossary from DataHub.
+    logger.info("Fetch the latest glossary from DataHub")
     top_level_nodes, top_level_terms = fetch_datahub_glossary()
     latest_glossary = existing_glossary.copy(
         update=dict(
@@ -495,24 +495,26 @@ def _update_glossary_file(
         deep=True,
     )
 
-    # Prune the latest glossary to only include file-managed nodes/terms
+    logger.info("Prune the latest glossary to only include file-managed nodes/terms")
     if prune:
         prune_latest_glossary(
             latest_glossary=latest_glossary,
             existing_glossary=existing_glossary,
         )
 
-    # Recursively simplify urn references where possible.
+    logger.info("Recursively simplify urn references where possible.")
     path_to_id_map = populate_path_vs_id(latest_glossary)
     replace_urn_refs_with_paths(latest_glossary, path_to_id_map=path_to_id_map)
 
-    # Minimize diffs between the two glossaries using the field defaults and default config.
+    logger.info(
+        "Minimize diffs between the two glossaries using the field defaults and default config."
+    )
     obj = glossary_to_dict_minimize_diffs(
         latest_glossary=latest_glossary,
         existing_glossary=existing_glossary,
     )
 
-    # Serialize back into yaml.
+    logger.info("Serialize back into yaml.")
     update_yml_to_match(pathlib.Path(file), pathlib.Path(output), obj)
 
 
