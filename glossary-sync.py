@@ -4,40 +4,27 @@ import pathlib
 from typing import Dict, Iterable, List, Optional, Set, Tuple, TypeVar, Union
 
 import click
-import ruamel.yaml.util
-from ruamel.yaml import YAML
 import progressbar
 import requests
-
-from datahub.ingestion.graph.client import (
-    DatahubClientConfig,
-    DataHubGraph,
-    get_default_graph,
-)
+import ruamel.yaml.util
+from datahub.ingestion.graph.client import (DatahubClientConfig, DataHubGraph,
+                                            get_default_graph)
 from datahub.ingestion.source.metadata.business_glossary import (
-    BusinessGlossaryConfig,
-    BusinessGlossaryFileSource,
-    DefaultConfig,
-    GlossaryNodeConfig,
-    GlossaryNodeInterface,
-    GlossaryTermConfig,
-    KnowledgeCard,
-    Owners,
-    materialize_all_node_urns,
-    populate_path_vs_id,
-)
-from datahub.metadata.schema_classes import (
-    AspectBag,
-    DomainsClass,
-    GlossaryNodeInfoClass,
-    GlossaryRelatedTermsClass,
-    GlossaryTermInfoClass,
-    InstitutionalMemoryClass,
-    OwnershipClass,
-)
+    BusinessGlossaryConfig, BusinessGlossaryFileSource, DefaultConfig,
+    GlossaryNodeConfig, GlossaryNodeInterface, GlossaryTermConfig,
+    KnowledgeCard, Owners, materialize_all_node_urns, populate_path_vs_id)
+from datahub.metadata.schema_classes import (AspectBag, DomainsClass,
+                                             GlossaryNodeInfoClass,
+                                             GlossaryRelatedTermsClass,
+                                             GlossaryTermInfoClass,
+                                             InstitutionalMemoryClass,
+                                             OwnershipClass)
 from datahub.utilities.urns.urn import guess_entity_type
+from ruamel.yaml import YAML
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
 
 ParentUrn = str
@@ -215,7 +202,7 @@ def fetch_datahub_glossary():
 
     logger.info("Construct the hierarchy of nodes.")
     top_level_nodes: List[GlossaryNodeConfig] = []
-    for (node, parent_urn) in raw_nodes.values():
+    for node, parent_urn in raw_nodes.values():
         if node is None:
             continue
         if parent_urn is None:
@@ -234,7 +221,7 @@ def fetch_datahub_glossary():
 
     logger.info("Construct the hierarchy of terms.")
     top_level_terms: List[GlossaryTermConfig] = []
-    for (term, parent_urn) in raw_terms.values():
+    for term, parent_urn in raw_terms.values():
         if term is None:
             continue
         if parent_urn is None:
@@ -407,9 +394,11 @@ def glossary_to_dict_minimize_diffs(
                         # Update defaults with the current node owner, if any.
                         # This way, the "owners" field cascades down to all child nodes.
                         defaults=defaults.copy(
-                            update=dict(owners=existing_node_elem.owners)
-                            if existing_node_elem.owners
-                            else dict()
+                            update=(
+                                dict(owners=existing_node_elem.owners)
+                                if existing_node_elem.owners
+                                else dict()
+                            )
                         ),
                     )
                 )
@@ -491,7 +480,7 @@ def _update_glossary_file(
 ) -> None:
     if not output:
         output = file
-        
+
     logger.info("Read the existing biz glossary file")
     existing_glossary = BusinessGlossaryFileSource.load_glossary_config(file)
     materialize_all_node_urns(existing_glossary, enable_auto_id=enable_auto_id)
@@ -517,7 +506,9 @@ def _update_glossary_file(
     path_to_id_map = populate_path_vs_id(latest_glossary)
     replace_urn_refs_with_paths(latest_glossary, path_to_id_map=path_to_id_map)
 
-    logger.info("Minimize diffs between the two glossaries using the field defaults and default config.")
+    logger.info(
+        "Minimize diffs between the two glossaries using the field defaults and default config."
+    )
     obj = glossary_to_dict_minimize_diffs(
         latest_glossary=latest_glossary,
         existing_glossary=existing_glossary,
