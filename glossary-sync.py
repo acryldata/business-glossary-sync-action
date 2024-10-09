@@ -58,6 +58,16 @@ def _datahub_ownership_to_owners(
         return None
 
     owner_urns = [owner.owner for owner in ownership.owners]
+    owner_type = "DEVELOPER"
+    owner_type_urn = None
+    for owners in ownership.owners:
+        if owners.typeUrn:
+            # Current glossary file format does not support type per user or group
+            # So we just take the first one for now
+            # More accurate representation would require changing the glossary file format
+            owner_type_urn = owners.typeUrn
+            owner_type = owners.type
+            break
 
     return Owners(
         users=[
@@ -72,6 +82,8 @@ def _datahub_ownership_to_owners(
             if guess_entity_type(urn) == "corpGroup"
         ]
         or None,
+        type=owner_type,
+        typeUrn=owner_type_urn,
     )
 
 
