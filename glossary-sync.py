@@ -1,6 +1,7 @@
 import logging
 import os
 import pathlib
+from collections import defaultdict
 from typing import Dict, Iterable, List, Optional, Set, Tuple, TypeVar, Union
 
 import click
@@ -53,38 +54,37 @@ def _get_id_from_urn(urn: str) -> str:
 
 def _datahub_ownership_to_owners(
     ownership: Optional[OwnershipClass],
-) -> Optional[Owners]:
+) -> Optional[Union[Owners, List[Owners]]]:
     if ownership is None:
         return None
 
-    owner_urns = [owner.owner for owner in ownership.owners]
-    owner_type = "DEVELOPER"
-    owner_type_urn = None
-    for owners in ownership.owners:
-        if owners.typeUrn:
-            # Current glossary file format does not support type per user or group
-            # So we just take the first one for now
-            # More accurate representation would require changing the glossary file format
-            owner_type_urn = owners.typeUrn
-            owner_type = owners.type
-            break
+    # Group owners by type/typeUrn
+    owners_by_type = defaultdict(list)
+    for owner in ownership.owners:
+        owners_by_type[(owner.type, owner.typeUrn)].append(owner.owner)
 
-    return Owners(
-        users=[
-            _get_id_from_urn(urn)
-            for urn in owner_urns
-            if guess_entity_type(urn) == "corpuser"
+    # Filter URNs by type
+    def filter_urns(urns: List[str], entity_type: str) -> Optional[List[str]]:
+        filtered = [
+            _get_id_from_urn(urn) 
+            for urn in urns 
+            if guess_entity_type(urn) == entity_type
         ]
-        or None,
-        groups=[
-            _get_id_from_urn(urn)
-            for urn in owner_urns
-            if guess_entity_type(urn) == "corpGroup"
-        ]
-        or None,
-        type=owner_type,
-        typeUrn=owner_type_urn,
-    )
+        return filtered or None
+
+    # Create owners object(s)
+    owners_list = [
+        Owners(
+            users=filter_urns(urns, "corpuser"),
+            groups=filter_urns(urns, "corpGroup"),
+            type=owner_type,
+            typeUrn=owner_type_urn,
+        )
+        for (owner_type, owner_type_urn), urns in owners_by_type.items()
+    ]
+
+    # Return single object if only one type, otherwise return list
+    return owners_list[0] if len(owners_list) == 1 else owners_list
 
 
 def _datahub_domain_to_str(domain: Optional[DomainsClass]) -> Optional[str]:
