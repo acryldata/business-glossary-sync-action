@@ -22,6 +22,10 @@ inputs:
     description: "Set to true to enable debug mode."
     default: "false"
 
+  author:
+    description: "The commit author name and email in the format 'Display Name <email@address.com>'. If not provided, uses the value copied from peter-evans/create-pull-request default (github.actor)."
+    required: false
+
 runs:
   using: "composite"
   steps:
@@ -60,6 +64,12 @@ runs:
           Updates the business glossary at ${{ inputs.business_glossary_file }} with changes from Acryl DataHub.
 
           Automated changes by [acryldata/business-glossary-sync-action](https://github.com/acryldata/business-glossary-sync-action).
+        
+        # If 'author' is not explicitly set, use a fallback that replicates the default from 
+        # peter-evans/create-pull-request, which is based on github.actor. 
+        # Note: Using null or an empty string ('') will cause an error, so we construct the default 
+        # explicitly to ensure safe fallback behavior.
+        author: ${{ inputs.author || format('{0} <{1}+{0}@users.noreply.github.com>', github.actor, github.actor_id) }}
 
 branding:
   icon: "activity"
