@@ -55,7 +55,7 @@ runs:
         DEBUG_MODE: ${{ inputs.debug_mode }}
 
     - name: Create Pull Request
-      uses: peter-evans/create-pull-request@v5
+      uses: peter-evans/create-pull-request@v7
       with:
         branch: acryl-business-glossary-sync
         commit-message: "[automated] Update business glossary at ${{ inputs.business_glossary_file }}"
